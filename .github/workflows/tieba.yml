@@ -1,12 +1,10 @@
+
 name: Daily Tieba Sign-In
 
 on:
   workflow_dispatch:
   schedule:
-    - cron: '30 22 * * *'  # UTC 22:30
-
-permissions:
-  contents: read
+    - cron: '30 22 * * *'  # 北京时间 6:30 (UTC+8)
 
 jobs:
   signin:
@@ -21,46 +19,13 @@ jobs:
         with:
           distribution: 'zulu'
           java-version: '8'
-          cache: 'maven'
+          cache: 'maven'  # 使用官方推荐的 Maven 依赖缓存
 
-      - name: Build
-        run: mvn -B compile
-
-      - name: Execute Sign-In
-        id: signin
+      - name: Build and execute
         env:
           BDUSS: ${{ secrets.BDUSS }}
+          SCKEY: ${{ secrets.SCKEY }}
         run: |
-          set -e
-          echo "=== Tieba Sign-In Start ==="
-
-          # 执行并保存日志
-          mvn -B exec:java \
+          mvn -B compile exec:java \
             -Dexec.mainClass="top.srcrs.Run" \
-            -Dexec.args="$BDUSS" | tee signin.log
-
-          echo "=== Tieba Sign-In Finished ==="
-
-      - name: Notify Success
-        if: success()
-        env:
-          SCKEY: ${{ secrets.SCKEY }}
-        run: |
-          if [ -n "$SCKEY" ]; then
-            CONTENT=$(cat signin.log | tail -n 50)
-            curl -s "https://sctapi.ftqq.com/${SCKEY}.send" \
-              -d "title=✅ Tieba Sign-In Success" \
-              --data-urlencode "desp=签到成功\n\n时间: $(date -u +"%Y-%m-%d %H:%M:%S") UTC\n\n日志摘要:\n$CONTENT"
-          fi
-
-      - name: Notify Failure
-        if: failure()
-        env:
-          SCKEY: ${{ secrets.SCKEY }}
-        run: |
-          if [ -n "$SCKEY" ]; then
-            CONTENT=$(cat signin.log 2>/dev/null | tail -n 50 || echo "无日志输出")
-            curl -s "https://sctapi.ftqq.com/${SCKEY}.send" \
-              -d "title=❌ Tieba Sign-In Failed" \
-              --data-urlencode "desp=签到失败\n\n时间: $(date -u +"%Y-%m-%d %H:%M:%S") UTC\n\n日志摘要:\n$CONTENT\n\n请检查 GitHub Actions 日志"
-          fi
+            -Dexec.args="$BDUSS $SCKEY"
